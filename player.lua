@@ -1,8 +1,10 @@
 Player = {
-    x = 10, y = 10,
+    x = WINDOW.CENTER_X, y = WINDOW.CENTER_Y,
     velocity = { x = 0, y = 0, speed = .7, cap = 20, drag = .4 },
     radius = 8,
+    movementNotches = 5,
 }
+
 
 function DoPlayerMovement()
     local helpingXVel = false -- is the player pressing a button to move the player faster in the x-direction they're currently going?
@@ -11,33 +13,34 @@ function DoPlayerMovement()
     local keys = {
         w = function ()
             helpingYVel = Player.velocity.y <= 0
-            Player.velocity.y = Player.velocity.y - Player.velocity.speed * GlobalDT
+            Player.velocity.y = Player.velocity.y - Player.velocity.speed * GlobalDT / Player.movementNotches
         end,
         s = function ()
             helpingYVel = Player.velocity.y >= 0
-            Player.velocity.y = Player.velocity.y + Player.velocity.speed * GlobalDT
+            Player.velocity.y = Player.velocity.y + Player.velocity.speed * GlobalDT / Player.movementNotches
         end,
         a = function ()
             helpingXVel = Player.velocity.x <= 0
-            Player.velocity.x = Player.velocity.x - Player.velocity.speed * GlobalDT
+            Player.velocity.x = Player.velocity.x - Player.velocity.speed * GlobalDT / Player.movementNotches
         end,
         d = function ()
             helpingXVel = Player.velocity.x >= 0
-            Player.velocity.x = Player.velocity.x + Player.velocity.speed * GlobalDT
+            Player.velocity.x = Player.velocity.x + Player.velocity.speed * GlobalDT / Player.movementNotches
         end,
     }
 
-    local isPressingSomething = false
-    for key, func in pairs(keys) do
-        if love.keyboard.isDown(key) then
-            isPressingSomething = true
-            func()
+    for _ = 1, Player.movementNotches do
+        for key, func in pairs(keys) do
+            if love.keyboard.isDown(key) then
+                func()
+            end
         end
-    end
 
-    ApplyPlayerDrag(not helpingXVel, not helpingYVel) -- if the player is not 'helping the x velocity' (thus counteracting it like moving in the opposite direction), drag should apply to help counteract it. the same for y.
-    CapPlayerVelocity()
-    ApplyPlayerVelocity()
+        ApplyPlayerDrag(not helpingXVel, not helpingYVel) -- if the player is not 'helping the x velocity' (thus counteracting it like moving in the opposite direction), drag should apply to help counteract it. the same for y.
+        CapPlayerVelocity()
+        ApplyPlayerVelocity()
+        DoPlayerCollisions()
+    end
 
     -- DoPlayerParticles()
 end
@@ -48,7 +51,7 @@ function ApplyPlayerDrag(doOnX, doOnY)
 
     -- picture a right triangle where the base and height are the x and y velocities of the player...
     local c = GetPlayerVelocityMagnitude() -- calculates the length of the hypotenuse (see the function definition)
-    local cTarget = zutil.relu(c - Player.velocity.drag * GlobalDT) -- calculates c minus the drag constant and relu's the difference (zutil.relu(x) returns x when x > 0. otherwise returns 0)
+    local cTarget = zutil.relu(c - Player.velocity.drag * GlobalDT / Player.movementNotches) -- calculates c minus the drag constant and relu's the difference (zutil.relu(x) returns x when x > 0. otherwise returns 0)
     local scaleFactor = cTarget / c -- calculates the scale factor needed to scale the triangle by to get the hypotenuse length (c) to equal cTarget
 
     -- multiplies the 'side lengths' of the triangle by the scale factor
@@ -73,8 +76,8 @@ function ApplyPlayerDrag(doOnX, doOnY)
     ]]
 end
 function ApplyPlayerVelocity()
-    Player.x = Player.x + Player.velocity.x
-    Player.y = Player.y + Player.velocity.y
+    Player.x = Player.x + Player.velocity.x * GlobalDT / Player.movementNotches
+    Player.y = Player.y + Player.velocity.y * GlobalDT / Player.movementNotches
 end
 function CapPlayerVelocity()
     if GetPlayerVelocityMagnitude() <= Player.velocity.cap then return end -- cancel the function if it doesn't need to be run
@@ -87,6 +90,70 @@ function CapPlayerVelocity()
 
     Player.velocity.x = Player.velocity.x * scaleFactor
     Player.velocity.y = Player.velocity.y * scaleFactor
+end
+
+function DoPlayerCollisions()
+    for _, self in ipairs(CurrentRoom.walls) do
+        local closestX = zutil.clamp(Player.x, self.x, self.x + self.width)
+        local closestY = zutil.clamp(Player.y, self.y, self.y + self.height)
+        local flattenVelocityOf = ""
+        local side
+
+        local function chooseXSide()
+            if Player.x < self.x then
+                side = "left"
+            elseif Player.x > self.x + self.width then
+                side = "right"
+            end
+        end
+        local function chooseYSide()
+            if Player.y < self.y then
+                side = "up"
+            elseif Player.y > self.y + self.height then
+                side = "down"
+            end
+        end
+
+        local distance = zutil.distance(closestX, closestY, Player.x, Player.y)
+
+        if distance < Player.radius then
+            if Player.x < self.x or Player.x > self.x + self.width then
+                flattenVelocityOf = flattenVelocityOf .. "x"
+
+                chooseXSide()
+            end
+            if Player.y < self.y or Player.y > self.y + self.height then
+                flattenVelocityOf = flattenVelocityOf .. "y"
+
+                chooseYSide()
+            end
+            if flattenVelocityOf == "xy" then
+                if math.abs(Player.x - closestX) > math.abs(Player.y - closestY) then
+                    flattenVelocityOf = "x"
+                    chooseXSide()
+                else
+                    flattenVelocityOf = "y"
+                    chooseYSide()
+                end
+            end
+
+            if side == "left" then
+                Player.x = self.x - Player.radius
+            elseif side == "right" then
+                Player.x = self.x + self.width + Player.radius
+            elseif side == "up" then
+                Player.y = self.y - Player.radius
+            elseif side == "down" then
+                Player.y = self.y + self.height + Player.radius
+            end
+
+            if flattenVelocityOf == "x" then
+                Player.velocity.x = 0
+            elseif flattenVelocityOf == "y" then
+                Player.velocity.y = 0
+            end
+        end
+    end
 end
 
 function DoPlayerParticles(cancel)

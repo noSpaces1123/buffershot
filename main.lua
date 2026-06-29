@@ -1,7 +1,7 @@
 ---@diagnostic disable: lowercase-global
 
 
-VersionNr = "0.1"
+VersionNr = "0.1.1"
 
 
 zutil = require "zutil"
@@ -11,10 +11,14 @@ zutil.standardinitialization(0, 0, NameOfTheGame, { fullscreen = true, highdpi =
 
 require "player"
 require "particle"
+require "rooms"
+require "interaction"
 
 
 function love.load()
     love.graphics.setBackgroundColor(1,1,1)
+
+    InitializeRooms()
 
     GlobalDT = 0
 end
@@ -29,6 +33,7 @@ end
 function love.draw()
     DrawBGParticles()
 
+    DrawWalls(CurrentRoom.walls)
     DrawPlayer()
 
     DrawParticles()

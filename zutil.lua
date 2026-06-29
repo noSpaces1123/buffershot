@@ -154,7 +154,7 @@ end
 --Supply a pair of coordinates. Returns the angle between them in radians.
 function zutil.anglebetween(x1, y1, x2, y2)
 ---@diagnostic disable-next-line: deprecated
-    return math.atan2(x2 - x1, y2 - y1)
+    return math.atan2(y2 - y1, x2 - x1)
 end
 
 --Supply a pair of coordinates. Returns the angle between them in degrees.
